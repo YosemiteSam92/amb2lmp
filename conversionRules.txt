@@ -1,0 +1,108 @@
+**** Conversion rules: AMBER -> LAMMPS LJ coeffs ****
+
+For each pair of atom types (i,j), with j>=i, the prmtop file stores the LJ
+coeffs in A,B format:
+      V_ij = A_ij/r_ij^12 - B_ij/r_ij^6
+where * A = 4 eps_ij sigma_ij^12
+      * B = 4 eps_ij sigma_ij^6
+with  * eps_ij = depth of the potential well (kcal/mol)
+      * sigma_ij = distance at which the potential is zero (A)
+      
+Lammps expects:  sigma_ii eps_ii 
+for each atom type
+
+Solving the system: 
+      * sigma = (A/B)^(1/6)
+      * eps = B^2/(4A)
+
+*** Warning: AMBER frcmod expects yet another format:
+      * R_vdw = Van der Waal's radius = 2^(1/6-1) sigma
+              = half of the radius giving the min of the potential well
+                (which is 2^(1/6) sigma)
+      * eps = as above 
+
+**** Conversion rule: AMBER -> LAMMPS dihedrals ****
+
+AMBER formula: E_d = (PK/IDIVF) * (1 + cos(PN*phi - PHASE))
+
+where * PK = The barrier height divided by a factor of 2
+      * IDIVF = The factor by which the torsional barrier is divided 
+      (most often 1)
+      * PN = The periodicity of the torsional barrier
+      * PHASE = The phase shift angle in the torsional function
+      
+The frcmod file lists the coefficients in this format:
+      IPT , JPT , KPT , LPT , IDIVF , PK , PHASE , PN
+where IPT , JPT , KPT , LPT = atom types involved in the dihedral
+
+Note: If PN < 0 then the torsional potential
+        is assumed to have more than one term, and the
+        values of the rest of the terms are read from the
+        next cards (lines) until a positive PN is encountered (this 
+        positive PN is still part of the dihedral).
+        The negative value of PN is used only for identifying
+        the existence of the next term and only its absolute value is used.
+        
+E.g. Suppose the frcmod file contains the lines:
+
+os-cx-c3-os    1     1.17500000    0.000  -2.0    SCEE=1.2 SCNB=2.0
+os-cx-c3-os    1     0.14400000    0.000   3.0    SCEE=1.2 SCNB=2.0
+cx-c3-os-ca    1     0.38333333    0.000   3.0    SCEE=1.2 SCNB=2.0
+
+os-cx-c3-os has PN = -2. Hence, the next card will also contribute to the 
+energy of this dihedral type. Since the next card has PN = 3 > 0, it is the
+last one for this dihedral type. So, the energy of os-cx-c3-os is:
+    E = 1.175*(1+cos(2*PHI-0)) + 0.144*(1+cos(3*PHI-0))
+The subsequent card corresponds to a different dihedral type, cx-c3-os-ca.
+
+LAMMPS formula: E_d = K(1+d*cos(n*phi))
+
+where * K = barrier height divided by 2
+      * d = +/- 1
+      * n = periodicity of the torsional barrier, integer > 0
+      
+The Dihedral Coeffs section of the data file lists the coeffs in the format:
+    K d n
+      
+CONVERSION: 
+      * K = PK/IDIVF
+      * d = 1 if PHASE = 0; d = -1 if PHASE = 180 (because cos(x+180)=-cos(x))
+      * n = |PN|
+      
+E.g. Consider again os-cx-c3-os. This dihedral type has double periodicity, i.e.
+its energy is given by the sum of two terms, as shown above. Since these two 
+terms have different barrier heights and different periodicities, they 
+correspond to two different LAMMPS dihedral types:
+
+    1  1.175 1 2
+    2  0.144 1 3
+      
+Hence, if dihedral i-j-k-l is of AMBER type os-cx-c3-os, it needs to appear
+twice in the Dihedrals section of the LAMMPS data file. Once with type 1 and 
+once with type 2, so that both terms contribute to the dihedral Hamiltonian, 
+as required by AMBER.
+
+OBS: this means that multiple AMBER types correspond to a single LAMMPS type; 
+hence, assigning AMBER names to LAMMPS dihedral cannot happen in a 1-to-1 
+fashion.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
